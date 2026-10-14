@@ -17,7 +17,7 @@ const MAX_FILE: u64 = 512 << 20;
 /// Waits for the app (`-AppPid`) to quit, installs the update and reopens the app.
 const HELPER: &str = r#"param([int]$AppPid, [string]$Kind, [string]$File, [string]$Dir, [string]$Exe)
 $ErrorActionPreference = 'Stop'
-$log = Join-Path $env:TEMP 'proddyt-switch-update.log'
+$log = Join-Path $env:TEMP 'proddyt-studio-update.log'
 try {
     Wait-Process -Id $AppPid -ErrorAction SilentlyContinue
     if ($Kind -eq 'installed') {
@@ -73,13 +73,19 @@ struct State {
 
 static STATE: OnceLock<Mutex<State>> = OnceLock::new();
 
-/// Where the user's choices are kept (`%APPDATA%\Proddyt Switch\updates-<repo>.json`).
+/// Where the user's choices are kept (`%APPDATA%\Proddyt Studio\updates-<repo>.json`).
 fn settings_file(repo: &str) -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("Proddyt Switch").join(format!("updates-{repo}.json")))
+    settings_in("Proddyt Studio", repo)
 }
 
+fn settings_in(suite: &str, repo: &str) -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join(suite).join(format!("updates-{repo}.json")))
+}
+
+/// Reads the Studio file; until the first write there, falls back to the old Proddyt Switch one.
 fn settings(repo: &str) -> serde_json::Value {
-    settings_file(repo).and_then(|f| std::fs::read_to_string(f).ok()).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    let read = |f: Option<PathBuf>| f.and_then(|f| std::fs::read_to_string(f).ok()).and_then(|s| serde_json::from_str(&s).ok());
+    read(settings_file(repo)).or_else(|| read(settings_in("Proddyt Switch", repo))).unwrap_or_default()
 }
 
 fn skip(repo: &str, tag: &str) {
@@ -111,7 +117,7 @@ fn installed() -> Option<(String, Install, PathBuf)> {
 fn curl() -> Command {
     let mut c = Command::new("curl.exe");
     c.creation_flags(CREATE_NO_WINDOW);
-    c.args(["-sSfL", "--proto", "=https", "-H", "User-Agent: proddyt-switch-updater"]);
+    c.args(["-sSfL", "--proto", "=https", "-H", "User-Agent: proddyt-studio-updater"]);
     c
 }
 
@@ -156,7 +162,7 @@ fn check(repo: &str, current: &str, install: Install) -> Result<Option<Release>,
 }
 
 fn download(release: &Release) -> Result<PathBuf, String> {
-    let work = std::env::temp_dir().join("proddyt-switch-update");
+    let work = std::env::temp_dir().join("proddyt-studio-update");
     std::fs::create_dir_all(&work).map_err(|e| format!("can't prepare the download ({e})"))?;
     let name = release.file.rsplit('/').next().filter(|n| !n.is_empty()).unwrap_or("update.bin");
     let to = work.join(name);

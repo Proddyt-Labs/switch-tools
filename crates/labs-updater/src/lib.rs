@@ -1,4 +1,4 @@
-//! Proddyt Switch updates (LABS-156): the app's fork publishes GitHub releases; at start this asks
+//! Proddyt Studio updates (LABS-156): the app's fork publishes GitHub releases; at start this asks
 //! when a newer one is out — Update, Not now, or Skip this version. Update downloads the installer
 //! (or the portable archive), asks to close the app, and a small PowerShell helper installs it and
 //! reopens the app.
@@ -8,7 +8,7 @@
 //! web build and other systems never ask. Nothing is downloaded before the user says yes.
 //!
 //! One call per frame, from the app's `eframe::App::logic`:
-//! `labs_updater::frame(ctx, "photo-labs", "Photo Labs");`
+//! `labs_updater::frame(ctx, "photo-labs", "Studio Photo");`
 
 #[cfg(all(windows, not(target_arch = "wasm32")))]
 mod imp;

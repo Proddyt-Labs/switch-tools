@@ -1,11 +1,11 @@
-# Proddyt Switch — baixa o portátil Windows mais recente de cada app (Releases dos forks Proddyt-Labs/*-labs)
+# Proddyt Studio — baixa o portátil Windows mais recente de cada app (Releases dos forks Proddyt-Labs/*-labs)
 # e extrai em uma pasta por app aqui ao lado. Rode com: botão direito → "Executar com o PowerShell".
 $ErrorActionPreference = 'Stop'
 $aqui = Split-Path -Parent $MyInvocation.MyCommand.Path
 $apps = 'print-labs','photo-labs','vector-labs','film-labs','light-labs','effect-labs','design-labs','sound-labs','word-labs','grid-labs','deck-labs','cad-labs'
 foreach ($repo in $apps) {
     try {
-        $rel = Invoke-RestMethod "https://api.github.com/repos/Proddyt-Labs/$repo/releases/latest" -Headers @{ 'User-Agent' = 'proddyt-switch' }
+        $rel = Invoke-RestMethod "https://api.github.com/repos/Proddyt-Labs/$repo/releases/latest" -Headers @{ 'User-Agent' = 'proddyt-studio' }
     } catch {
         Write-Host "$repo : ainda sem release" -ForegroundColor DarkGray; continue
     }

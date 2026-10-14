@@ -1,4 +1,4 @@
-"""Copy crates/labs-updater into each Proddyt Switch app and call it from eframe::App::logic.
+"""Copy crates/labs-updater into each Proddyt Studio app and call it from eframe::App::logic.
 
 Usage: python vendor-labs-updater.py <switch dir> [repo ...]   (idempotent)
 """
@@ -9,9 +9,9 @@ import subprocess
 import sys
 
 NAMES = {
-    "photo-labs": "Photo Labs", "vector-labs": "Vector Labs", "light-labs": "Light Labs", "film-labs": "Film Labs",
-    "effect-labs": "Effect Labs", "design-labs": "Design Labs", "sound-labs": "Sound Labs", "word-labs": "Word Labs",
-    "grid-labs": "Grid Labs", "deck-labs": "Deck Labs", "cad-labs": "CAD Labs",
+    "photo-labs": "Studio Photo", "vector-labs": "Studio Vector", "light-labs": "Studio Light", "film-labs": "Studio Film",
+    "effect-labs": "Studio Effect", "design-labs": "Studio Design", "sound-labs": "Studio Sound", "word-labs": "Studio Word",
+    "grid-labs": "Studio Grid", "deck-labs": "Studio Deck", "cad-labs": "Studio CAD",
 }
 LOGIC = re.compile(r"(\n(\s*)fn logic\(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame\) \{\n)")
 
@@ -34,11 +34,13 @@ for repo in sys.argv[2:] or NAMES:
                     impl = impl or p
     s = open(impl, encoding="utf8").read()
     call = f'labs_updater::frame(ctx, "{repo}", "{NAMES[repo]}");'
+    s = re.sub(r'labs_updater::frame\(ctx, "%s", "[^"]*"\);' % re.escape(repo), call, s)
+    s = s.replace("// Proddyt Switch: asks", "// Proddyt Studio: asks")
     if call not in s:
         m = LOGIC.search(s)
         assert m, impl
-        s = s[: m.end()] + f"{m.group(2)}    // Proddyt Switch: asks to update from the fork's releases (LABS-156).\n{m.group(2)}    {call}\n" + s[m.end():]
-        open(impl, "w", encoding="utf8", newline="\n").write(s)
+        s = s[: m.end()] + f"{m.group(2)}    // Proddyt Studio: asks to update from the fork's releases (LABS-156).\n{m.group(2)}    {call}\n" + s[m.end():]
+    open(impl, "w", encoding="utf8", newline="\n").write(s)
     crate_dir = impl
     while not os.path.exists(os.path.join(crate_dir, "Cargo.toml")):
         crate_dir = os.path.dirname(crate_dir)

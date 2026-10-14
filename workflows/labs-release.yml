@@ -1,6 +1,6 @@
 name: Labs release
 
-# Proddyt Switch: builds the app for Windows, Linux and macOS and publishes a GitHub Release
+# Proddyt Studio: builds the app for Windows, Linux and macOS and publishes a GitHub Release
 # (portable archives + a Windows installer) whenever main has new commits. Runs on pushes to main,
 # every day after the upstream sync, or by hand. The app's updater reads these releases.
 on:
@@ -86,15 +86,23 @@ jobs:
         shell: pwsh
         run: |
           $app = "${{ needs.check.outputs.app }}"; $tag = "${{ needs.check.outputs.tag }}"
-          $nome = (Get-Culture).TextInfo.ToTitleCase(($app -replace 'craft$','')) + ' Labs'
+          $base = ($app -replace 'craft$','')
+          # AppId keeps the old Switch name so existing installs upgrade in place (ADR 2026-10-14 marca Proddyt).
+          $appId = (Get-Culture).TextInfo.ToTitleCase($base) + ' Labs'
+          $nome = 'Studio ' + $(if ($base -eq 'cad') { 'CAD' } else { (Get-Culture).TextInfo.ToTitleCase($base) })
           $src = (Resolve-Path "dist/$app-windows-x64").Path
+          Invoke-WebRequest "https://raw.githubusercontent.com/Proddyt-Labs/switch-tools/main/icons/$app.ico" -OutFile "$src\$app.ico"
           $iss = @(
             '[Setup]',
+            "AppId=$appId",
             "AppName=$nome",
             "AppVersion=$tag",
-            'AppPublisher=Proddyt Labs (fork of ArtCraft)',
-            "DefaultDirName={localappdata}\Programs\Proddyt Switch\$nome",
-            'DefaultGroupName=Proddyt Switch',
+            'AppPublisher=Proddyt Studio (fork of ArtCraft)',
+            "DefaultDirName={localappdata}\Programs\Proddyt Studio\$nome",
+            'DefaultGroupName=Proddyt Studio',
+            'UsePreviousGroup=no',
+            "SetupIconFile=$src\$app.ico",
+            "UninstallDisplayIcon={app}\$app.ico",
             'PrivilegesRequired=lowest',
             'OutputDir=dist',
             "OutputBaseFilename=$app-windows-x64-setup",
@@ -104,9 +112,13 @@ jobs:
             'Name: desktopicon; Description: "Atalho na area de trabalho"',
             '[Files]',
             "Source: ""$src\*""; DestDir: ""{app}""; Flags: recursesubdirs",
+            '[InstallDelete]',
+            "Type: files; Name: ""{userprograms}\Proddyt Switch\$appId.lnk""",
+            "Type: files; Name: ""{userdesktop}\$appId.lnk""",
+            "Type: dirifempty; Name: ""{userprograms}\Proddyt Switch""",
             '[Icons]',
-            "Name: ""{group}\$nome""; Filename: ""{app}\$app.exe""",
-            "Name: ""{userdesktop}\$nome""; Filename: ""{app}\$app.exe""; Tasks: desktopicon",
+            "Name: ""{group}\$nome""; Filename: ""{app}\$app.exe""; IconFilename: ""{app}\$app.ico""",
+            "Name: ""{userdesktop}\$nome""; Filename: ""{app}\$app.exe""; IconFilename: ""{app}\$app.ico""; Tasks: desktopicon",
             '[Run]',
             "Filename: ""{app}\$app.exe""; Description: ""Abrir $nome""; Flags: nowait postinstall skipifsilent"
           )
@@ -140,4 +152,4 @@ jobs:
           printf '%s\n' "${files[@]}"
           gh release create "${{ needs.check.outputs.tag }}" "${files[@]}" --target "$GITHUB_SHA" \
             --title "${{ needs.check.outputs.tag }}" \
-            --notes "Build automático do Proddyt Switch ($(git rev-parse --short HEAD)). Mudanças: suas features (PRs deste fork) + o que veio do projeto original (sync diário)."
+            --notes "Build automático do Proddyt Studio ($(git rev-parse --short HEAD)). Mudanças: suas features (PRs deste fork) + o que veio do projeto original (sync diário)."

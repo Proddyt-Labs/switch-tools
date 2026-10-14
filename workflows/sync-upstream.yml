@@ -1,7 +1,9 @@
 name: Sync upstream
 
-# Fork: brings the upstream (storytold) main into this fork's main every day (GitHub's "Sync fork"),
-# keeping the fork's own features. If the merge conflicts, the run fails and GitHub emails the owner.
+# Fork: brings the upstream (storytold) default branch into this fork as a reviewable PR, instead
+# of merging straight into main. The old "merge-upstream" API failed every day because the fork
+# always conflicts with its own features (updater, labs workflows, rebrand). A PR surfaces the
+# changes and conflicts for a human to resolve. See LABS-165. Upstream code only reaches main through a PR the owner reviews and merges.
 on:
   schedule:
     - cron: "40 6 * * *"
@@ -9,12 +11,65 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Merge upstream main
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open (or update) a PR with upstream's changes
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api -X POST "repos/${{ github.repository }}/merge-upstream" -f branch=main
+        run: |
+          set -euo pipefail
+          UP=$(gh repo view --json parent -q '.parent.owner.login + "/" + .parent.name')
+          if [ -z "$UP" ] || [ "$UP" = "/" ]; then
+            echo "No parent repo — nothing to sync."
+            exit 0
+          fi
+          DEF=$(gh repo view "$UP" --json defaultBranchRef -q .defaultBranchRef.name)
+          echo "Upstream: $UP@$DEF"
+          git remote add upstream "https://github.com/$UP.git"
+          git fetch --no-tags upstream "$DEF"
+
+          if git merge-base --is-ancestor "upstream/$DEF" HEAD; then
+            echo "Already up to date with upstream."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BR="sync/upstream"
+          git branch -f "$BR" origin/main
+          git switch "$BR"
+
+          # Merge without committing, so we can drop upstream's workflow changes first: we keep our
+          # own CI/release/sync workflows, and the default GITHUB_TOKEN can't push .github/workflows
+          # anyway (needs the `workflows` scope).
+          set +e
+          git merge --no-commit --no-edit "upstream/$DEF"
+          set -e
+          git checkout origin/main -- .github/workflows 2>/dev/null || true
+          CONFLICTS=$(git ls-files -u | wc -l)
+          git add -A
+          git commit --no-edit -m "merge upstream/$DEF"
+
+          if [ "$CONFLICTS" -gt 0 ]; then
+            SUFFIX=" (conflicts)"
+            BODY="Automated merge of \`$UP@$DEF\` into \`main\` (upstream workflows skipped). **Has conflicts** — the branch keeps the conflict markers; resolve them before merging."
+          else
+            SUFFIX=""
+            BODY="Automated merge of \`$UP@$DEF\` into \`main\` (upstream workflows skipped). Merged cleanly — review and merge."
+          fi
+
+          git push -f origin "$BR"
+
+          if gh pr view "$BR" --json state -q .state 2>/dev/null | grep -q OPEN; then
+            gh pr edit "$BR" --title "Sync upstream$SUFFIX" --body "$BODY"
+          else
+            gh pr create --base main --head "$BR" --title "Sync upstream$SUFFIX" --body "$BODY"
+          fi
